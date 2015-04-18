@@ -1,25 +1,29 @@
 /*
-  Calculator - a lightweight GTK text editor
-  Copyright (C) 2005 Ben Good, James Hartzell
-  This program is free software; you can redistribute it and/or modify it 
-  under the terms of the GNU General Public License as published by the
-  Free Software Foundation; either version 2 of the Licesnse, or (at your
-  option) any later version.
-  This program is distributed in the hope that it will be useful but 
-  WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. 
-  See the GNU General Public License for more details. You should have
-  received a copy of the GNU General Public License along with this 
-  program; if not, write to the Free Software Foundaton, Inc.,
-  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
-*/
+    GED3, A lightweight text editor built on GTK3.
+    This is a derivative work of GED  https://github.com/8l/ged
+    Copyright (C) 2015  Hamish West
 
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 /*Standard C library includes*/
 #include <stdarg.h>
 #include <stdio.h>
 
 /*library includes*/
 #include <gtk/gtk.h>
+#include <string.h>
+#include <stdlib.h>
 
 /*main structure - this is not supposed to be an gobject-related anything!*/
 gint ged_instances=0;
@@ -89,7 +93,7 @@ GtkWidget *create_menu(GedWindow *self,const char *name, ...)
       g_signal_connect(item,"activate",
 		       G_CALLBACK(va_arg(ap,menu_function)),
 		       (void *)self);
-      gtk_menu_append(GTK_MENU(menu),item);
+      gtk_menu_shell_append(GTK_MENU(menu),item);
       gtk_widget_show(item);
     }
   item=gtk_menu_item_new_with_mnemonic(name);
@@ -162,6 +166,7 @@ void open_file(GedWindow *self,const char *filename)
 					   completely freed.*/
       }
     data_offset+=read_len;
+  
   }
   fclose(infile);
   data[data_len]='\0';
@@ -169,6 +174,7 @@ void open_file(GedWindow *self,const char *filename)
   gtk_text_buffer_set_text(buffer,data,data_len);
   gtk_text_buffer_set_modified(buffer,0);
 }
+  
 
 gchar *get_buffer_text(GedWindow *self)
 {
@@ -232,8 +238,9 @@ GedWindow *draw_ged_window()
   container = gtk_vbox_new(0,0);
   
   menu_bar=gtk_menu_bar_new();
+  gtk_menu_bar_set_pack_direction(GTK_MENU_BAR(menu_bar),GTK_PACK_DIRECTION_LTR);
   gtk_widget_show(menu_bar);
-  gtk_menu_bar_append(menu_bar,
+  gtk_menu_shell_append(GTK_MENU_BAR(menu_bar),
 		      create_menu(self,"_File",
 				  "_New","<Control>n",&new_item_clicked,
 				  "_Open...","<Control>o",&open_item_clicked,
@@ -241,7 +248,7 @@ GedWindow *draw_ged_window()
 				  "Save _as...",NULL,&save_as_item_clicked,
 				  "_Quit","<Control>q",&quit_item_clicked,
 				  NULL));
-  gtk_menu_bar_append(menu_bar,
+  gtk_menu_shell_append(GTK_MENU_BAR(menu_bar),
 		      create_menu(self,"_Edit",
 				  "Cu_t","<Control>x",&cut_item_clicked,
 				  "_Copy","<Control>c",&copy_item_clicked,
@@ -249,6 +256,10 @@ GedWindow *draw_ged_window()
 				  /* "Disable _Word Wrap",NULL,
 				     &word_wrap_item_clicked, */
 				  NULL)); 
+  gtk_menu_shell_append(GTK_MENU_BAR(menu_bar),
+                      create_menu(self,"Help",
+                                 "About",NULL,&quit_item_clicked,         
+                                 NULL));
   /*TODO: word wrap feature should be check-box-type item*/
 
   self->text_view=gtk_text_view_new();
@@ -268,7 +279,7 @@ GedWindow *draw_ged_window()
   
   self->window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_container_add(GTK_CONTAINER(self->window),container);
-  gtk_window_set_title(GTK_WINDOW(self->window),"Untitled");
+  gtk_window_set_title(GTK_WINDOW(self->window),"GED3");
   /*gtk_window_set_border_width(GTK_WINDOW(self->window),0); 
     /*apparently there's no
     such function*/
@@ -357,23 +368,34 @@ void new_item_clicked(GtkMenuItem *item,gpointer data)
 
 void open_item_clicked(GtkMenuItem *item,gpointer data)
 {
-  GedWindow *self;
-  self=(GedWindow *)data;
-  self->file_selector=gtk_file_selection_new("Select file to open...");
-  g_signal_connect(GTK_FILE_SELECTION(self->file_selector)->ok_button,
-		   "clicked",G_CALLBACK(open_selected_file),data);
-  g_signal_connect_swapped(GTK_FILE_SELECTION(self->file_selector)->
-			   cancel_button,"clicked",
-			   G_CALLBACK(gtk_widget_destroy),self->file_selector);
-  gtk_widget_show(self->file_selector);
+GedWindow *self;
+self=(GedWindow *)data;
+GtkWidget *dialog;
+GtkFileChooserAction action = GTK_FILE_CHOOSER_ACTION_OPEN;
+gint res;
+
+dialog = gtk_file_chooser_dialog_new ("Open File",NULL,action,("_Cancel"),GTK_RESPONSE_CANCEL,("_Open"),GTK_RESPONSE_ACCEPT,NULL);
+
+res = gtk_dialog_run (GTK_DIALOG (dialog));
+if (res == GTK_RESPONSE_ACCEPT)
+  {
+    char *filename;
+    GtkFileChooser *chooser = GTK_FILE_CHOOSER (dialog);
+    filename = gtk_file_chooser_get_filename (chooser);
+    open_file (self,filename);
+    g_free (filename);
+  }
+
+gtk_widget_destroy (dialog);
 }
 
 void open_selected_file(GtkButton *button,gpointer data)
 {
+  GtkFileChooser *chooser;
   const gchar *nm;
   GedWindow *self;
   self=(GedWindow *)data;
-  nm=gtk_file_selection_get_filename(GTK_FILE_SELECTION(self->file_selector));
+  nm=gtk_file_chooser_get_filename(chooser);
   open_file(self,nm);
   gtk_widget_destroy(self->file_selector);
   self->file_selector=0;
@@ -389,25 +411,41 @@ void save_item_clicked(GtkMenuItem *item,gpointer data)
     save_file(self,self->current_filename);
 }
 
-void save_as_item_clicked(GtkMenuItem *item,gpointer data)
+void save_as_item_clicked(GtkMenuItem *item,gpointer data) //Broken. Doesnt write until closed
 {
   GedWindow *self;
   self=(GedWindow *)data;
-  self->file_selector=gtk_file_selection_new("Select location to save...");
-  g_signal_connect(GTK_FILE_SELECTION(self->file_selector)->ok_button,
-		   "clicked",G_CALLBACK(save_selected_file),data);
-  g_signal_connect_swapped(GTK_FILE_SELECTION(self->file_selector)->
-			   cancel_button,"clicked",
-			   G_CALLBACK(gtk_widget_destroy),self->file_selector);
-  gtk_widget_show(self->file_selector);
+  GtkWidget *dialog;
+GtkFileChooser *chooser;
+GtkFileChooserAction action = GTK_FILE_CHOOSER_ACTION_SAVE;
+gint res;
+
+dialog = gtk_file_chooser_dialog_new ("Save File",NULL, action, ("_Cancel"), GTK_RESPONSE_CANCEL,("_Save"), GTK_RESPONSE_ACCEPT, NULL);
+chooser = GTK_FILE_CHOOSER (dialog);
+
+gtk_file_chooser_set_do_overwrite_confirmation (chooser, TRUE);
+gtk_file_chooser_set_current_name (chooser,NULL);
+
+res = gtk_dialog_run (GTK_DIALOG (dialog));
+if (res == GTK_RESPONSE_ACCEPT)
+  {
+    char *filename;
+    filename = gtk_file_chooser_get_filename (chooser);
+    save_file(self,filename);
+    g_free (filename);
+   }
+
+  gtk_widget_destroy (dialog);
+  
 }
 
 void save_selected_file(GtkButton *button,gpointer data)
 {
+  GtkFileChooser *chooser;
   const gchar *nm;
   GedWindow *self;
   self=(GedWindow *)data;
-  nm=gtk_file_selection_get_filename(GTK_FILE_SELECTION(self->file_selector));
+  nm=gtk_file_chooser_get_filename(chooser);
   save_file(self,nm);
   gtk_widget_destroy(self->file_selector);
   self->file_selector=0;
@@ -460,5 +498,5 @@ void paste_item_clicked(GtkMenuItem *item,gpointer data)
 
 void word_wrap_item_clicked(GtkMenuItem *item,gpointer data)
 {
-  fprintf(stderr,"Not yet implemented\n");
+ fprintf(stderr,"Not yet implemented\n");
 }
