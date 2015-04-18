@@ -3,6 +3,8 @@ http://sourceforge.net/projects/ged/
 
 Benjamin Good and James Hartzell
 
+Forked and upgraded to GTK3 by Hamish West(github.com/TN-1).
+
 INTRODUCTION
 ============
 We developed ged to be a simple light-weight text editor using the gtk+
